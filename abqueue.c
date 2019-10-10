@@ -29,8 +29,11 @@ struct abqueue_node_s {
   struct abqueue_node_s *next;
 };
 
-static void _init_recycle_queue();
+static void _init_recycle_queue(void);
+static abqueue_node_t* _get_usable_node(abqueue_t *abqueue);
 static abqueue_node_t* _init_abqueue_node(abqueue_t *abqueue);
+static int _enqueue(abqueue_t *abqueue, abqueue_node_t *node);
+static abqueue_node_t* _dequeue(abqueue_t *abqueue);
 
 static inline void* _abqueue_malloc(void* mpl, size_t sz){
   return malloc(sz);
@@ -53,25 +56,99 @@ int abqueue_init(abqueue_t *abqueue, void* mpl, abqueue_malloc_fn abqueue_malloc
   abqueue->head = abqueue->tail = base;
   abqueue->size = 0;
   
-  _init_recycle_queue();
-  
   return 0;
 }
 
-static void _init_recycle_queue(){
-  _recycle_queue = malloc(sizeof(abqueue_t));
-  _recycle_queue->head = _recycle_queue->tail = NULL;
-  _recycle_queue->size = 0;
-}
-
-static abqueue_node_t* _init_abqueue_node(abqueue_t *abqueue){
-  abqueue_node_t *node = abqueue->_malloc(abqueue->mpl, sizeof(abqueue_node_t));
+int abqueue_enq(abqueue_t *abqueue, void *value){
+  abqueue_node_t *node = _get_usable_node(abqueue);
+  
   if(NULL == node){
     perror("Malloc error with ABQueue node");
     return errno;
   }
-  node->value = NULL;
-  node->next = NULL;
+  node->value = value;
+  
+  if(-1 == _enqueue(abqueue, node)){
+      perror("Enqueue error");
+      return errno;
+  }
+  
+  __ABQ_ADD_AND_FETCH(&abqueue->size, 1);
+  return 0;
+}
+
+void* abqueue_deq(abqueue_t *abqueue){
+  abqueue_node_t *node = NULL;
+  node = _dequeue(abqueue);
+  if(NULL != node){
+    __ABQ_FETCH_AND_ADD(&abqueue->size, -1);
+    if(NULL == _recycle_queue){
+      _init_recycle_queue();
+    }
+    _enqueue(_recycle_queue, node);
+    
+    return node->value;
+  }
+  
+  return NULL;
+}
+
+static int _enqueue(abqueue_t *abqueue, abqueue_node_t *node){
+  abqueue_node_t *tail = NULL;
+  
+  for(;;){
+      tail = abqueue->tail;
+      if(__ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->tail, tail, tail)){
+        __ABQ_SYNC_MEMORY();
+        if(__ABQ_BOOL_COMPARE_AND_SWAP(&tail->next, NULL, node)){
+          __ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->tail, tail, node);
+          return 0;
+        }
+      }
+    }
+    
+    return -1;
+}
+
+static abqueue_node_t* _dequeue(abqueue_t *abqueue){
+  abqueue_node_t *head, *next;
+  
+  for(;;){
+    head = abqueue->head;
+    if (__ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->head, head, head)) {
+      __ABQ_SYNC_MEMORY();
+      next = head->next;
+      if (__ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->tail, head, head) && NULL == next) {
+        return NULL;
+      } else {
+        if(__ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->head, head, next)){
+          return head;
+        }
+      }
+    }
+  }
+  
+  return NULL;
+}
+
+static abqueue_node_t* _get_usable_node(abqueue_t *abqueue){
+  abqueue_node_t *node = NULL;
+  node = _init_abqueue_node(abqueue);
   
   return node;
+}
+
+static abqueue_node_t* _init_abqueue_node(abqueue_t *abqueue){
+  abqueue_node_t *node = abqueue->_malloc(abqueue->mpl, sizeof(abqueue_node_t));
+  if(NULL != node){
+    node->value = NULL;
+    node->next = NULL;
+  }
+  
+  return node;
+}
+
+static void _init_recycle_queue(void){
+  _recycle_queue = malloc(sizeof(abqueue_t));
+  abqueue_simple_init(_recycle_queue);
 }
