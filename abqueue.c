@@ -9,11 +9,9 @@
 #include <sched.h>
 
 #define __ABQ_BOOL_COMPARE_AND_SWAP __sync_bool_compare_and_swap
-#define __ABQ_VAL_COMPARE_AND_SWAP __sync_val_compare_and_swap
 #define __ABQ_FETCH_AND_ADD __sync_fetch_and_add
 #define __ABQ_ADD_AND_FETCH __sync_add_and_fetch
 #define __ABQ_SYNC_MEMORY __sync_synchronize
-#define __ABQ_YIELD_THREAD sched_yield
 
 #define abq_bool_t int
 
@@ -50,6 +48,18 @@ size_t abqueue_size(abqueue_t *abqueue){
   return __ABQ_ADD_AND_FETCH(&abqueue->size, 0);
 }
 
+void abqueue_destroy(abqueue_t *abqueue){
+  void* p;
+  while((p = abqueue_deq(abqueue))){
+    abqueue->_free(abqueue->mpl, p);
+  }
+  if(NULL != _recycle_queue){
+    while((p = _dequeue(_recycle_queue))){
+      _recycle_queue->_free(_recycle_queue->mpl, p);
+    }
+  }
+}
+
 int abqueue_simple_init(abqueue_t *abqueue){
   return abqueue_init(abqueue, NULL, _abqueue_malloc, _abqueue_free);
 }
@@ -60,25 +70,34 @@ int abqueue_init(abqueue_t *abqueue, void* mpl, abqueue_malloc_fn abqueue_malloc
   abqueue->_free = abqueue_free;
   abqueue->mpl = mpl;
   
-  abqueue->head = abqueue->tail = NULL;
+  abqueue_node_t *base = _init_node(abqueue);
+  if(NULL == base){
+    perror("Node malloc error");
+    return errno;
+  }
+  abqueue->head = abqueue->tail = base;
   abqueue->size = 0;
   
   return 0;
 }
 
-int abqueue_enq(abqueue_t *abqueue, void *value){
+int abqueue_enq(abqueue_t* abqueue, void* value){
   abqueue_node_t *node = _get_usable_node(abqueue);
   
   if(NULL == node){
+    printf("%s", "error...000");
     perror("Malloc error with ABQueue node");
     return errno;
   }
   node->value = value;
+  printf("-- enq %p\n", (void*)node);
   
   if(-1 == _enqueue(abqueue, node)){
-      perror("Enqueue error");
-      return errno;
+    printf("%s", "error...!!!");
+    perror("Enqueue error");
+    return errno;
   }
+  printf("abqueue enq size: %zu\n", abqueue->size);
   
   return 0;
 }
@@ -90,7 +109,9 @@ void* abqueue_deq(abqueue_t *abqueue){
     if(NULL == _recycle_queue){
       _init_recycle_queue(abqueue);
     }
+    printf("deq size: %zu ---\n", __ABQ_ADD_AND_FETCH(&abqueue->size, 0));
     _recycle_node(node);
+    printf("-- deq %p\n", (void*)node);
     
     return node->value;
   }
@@ -100,24 +121,23 @@ void* abqueue_deq(abqueue_t *abqueue){
 
 static int _enqueue(abqueue_t *abqueue, abqueue_node_t *node){
   abqueue_node_t *tail = NULL;
-  
   for(;;){
-      tail = abqueue->tail;
-      if(__ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->tail, tail, tail)){
-        __ABQ_SYNC_MEMORY();
-        
-        if(NULL == abqueue->head && NULL == abqueue->tail && 0 == abqueue_size(abqueue)){
-          abqueue->head = abqueue->tail = node;
-          __ABQ_ADD_AND_FETCH(&abqueue->size, 1);
-          return 0;
-        }
-        
-        if(__ABQ_BOOL_COMPARE_AND_SWAP(&tail->next, NULL, node)){
-          __ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->tail, tail, node);
-          __ABQ_ADD_AND_FETCH(&abqueue->size, 1);
-          return 0;
-        }
-      }
+    __ABQ_SYNC_MEMORY();
+    tail = abqueue->tail;
+      
+    if(__ABQ_BOOL_COMPARE_AND_SWAP(&tail->next, NULL, node)){
+      __ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->tail, tail, node);
+      __ABQ_ADD_AND_FETCH(&abqueue->size, 1);
+//        printf("--%p--%s----\n", (void *)node->next, "_enqueue 522...");
+      return 0;
+    }
+    
+    printf("%zu\n", abqueue->size);
+    printf("%p\n", (void *)abqueue->head);
+    printf("%p\n", (void *)abqueue->tail);
+    printf("%p\n", (void *)tail->next);
+    printf("----%s----\n", "_enqueue 622...");
+//      break;
     }
     
     return -1;
@@ -129,23 +149,23 @@ static abqueue_node_t* _dequeue(abqueue_t *abqueue){
   for(;;){
     head = abqueue->head;
     if (__ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->head, head, head)) {
-      __ABQ_SYNC_MEMORY();
       
-      if(NULL == abqueue->head && NULL == abqueue->tail && 0 == abqueue_size(abqueue)){
-        return NULL;
-      }
-      
-      if(abqueue->head == abqueue->tail && 1 == abqueue_size(abqueue)){
-        abqueue->head = NULL;
-        abqueue->tail = NULL;
-        __ABQ_FETCH_AND_ADD(&abqueue->size, -1);
-        return head;
-      }
-        
       next = head->next;
-      if(__ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->head, head, next)){
-        __ABQ_FETCH_AND_ADD(&abqueue->size, -1);
-        return head;
+      if(__ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->tail, head, head)){
+        if(NULL == next){
+          __ABQ_SYNC_MEMORY();
+          return NULL;
+        }
+      } else {
+        if(next){
+          if(__ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->head, head, next)){
+            __ABQ_FETCH_AND_ADD(&abqueue->size, -1);
+            return head;
+          }
+        } else {
+          __ABQ_SYNC_MEMORY();
+          return NULL;
+        }
       }
     }
   }
@@ -156,18 +176,24 @@ static abqueue_node_t* _dequeue(abqueue_t *abqueue){
 static abqueue_node_t* _get_usable_node(abqueue_t *abqueue){
   abqueue_node_t *node = NULL;
   
+  if(NULL == _recycle_queue){
+    _init_recycle_queue(abqueue);
+  }
+  
   if(abqueue_size(_recycle_queue) > 0){
-    node = abqueue_deq(_recycle_queue);
-    _restore_node(node);
+    node = _dequeue(_recycle_queue);
   } else {
     node = _init_node(abqueue);
   }
+  _restore_node(node);
   
   return node;
 }
 
 static int _recycle_node(abqueue_node_t* node){
   _free_recycle_node();
+  _restore_node(node);
+  printf("-- recycle %p\n", (void*)node);
   if(0 == _enqueue(_recycle_queue, node)){
     return 0;
   }
