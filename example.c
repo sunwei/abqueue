@@ -24,7 +24,7 @@ void running_test(test_function testfn);
 struct timeval  tv1, tv2;
 #define total_put 5
 #define total_running_loop 5
-int nthreads = 2;
+int nthreads = 4;
 int one_thread = 1;
 int nthreads_exited = 0;
 abqueue_t *myq;
@@ -66,7 +66,7 @@ void*  worker_s(void *arg)
 		int_data = (int*)malloc(sizeof(int));
 		assert(int_data != NULL);
 		*int_data = i;
-		printf("%p\n", (void *)int_data);
+		printf("init data %p\n", (void *)int_data);
 		
 		while (abqueue_enq(myq, int_data)) {
 			 printf("ENQ FULL?\n");
@@ -108,7 +108,7 @@ pthread_join(threads[i], NULL); \
 }
 
 #define detach_thread_and_loop \
-printf("%s\n", "abcd...");\
+printf("%s\n", "detach thread and loop...");\
 for (i = 0; i < nthreads; i++)\
   pthread_detach(threads[i]);\
 while ( nthreads_exited < nthreads ) \
