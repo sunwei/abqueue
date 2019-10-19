@@ -68,7 +68,6 @@ static abqueue_node_t* _init_node(abqueue_t *abqueue);
 
 static int _enqueue(abqueue_t *abqueue, void *value);
 static abqueue_node_t* _dequeue(abqueue_t *abqueue);
-void* _abqueue_deq_async(abqueue_t *abqueue);
 
 static inline void* _abqueue_malloc(void* mpl, size_t sz){
   return malloc(sz);
@@ -117,9 +116,9 @@ int abqueue_enq(abqueue_t* abqueue, void* value){
   return 0;
 }
 
-void* _abqueue_deq_async(abqueue_t *abqueue){
+void* abqueue_deq(abqueue_t *abqueue) {
   void *val = NULL;
-  
+    
   abqueue_node_t *node = NULL;
   node = _dequeue(abqueue);
   if(node){
@@ -130,15 +129,6 @@ void* _abqueue_deq_async(abqueue_t *abqueue){
     _recycle_node(node);
   }
   return val;
-}
-
-void* abqueue_deq(abqueue_t *abqueue) {
-  void *v;
-  while ( !(v = _abqueue_deq_async(abqueue)) ) {
-    abqueue_sleep(1);
-    printf(".");
-  }
-  return v;
 }
 
 static int _enqueue(abqueue_t *abqueue, void *value){

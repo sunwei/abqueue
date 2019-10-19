@@ -11,13 +11,15 @@
 
 typedef void (*test_function)(pthread_t*);
 
-void _sleep(unsigned int milisec);
-void*  worker_c(void *);
-void*  worker_s(void *);
-void*  worker_sc(void *);
+void  _sleep(unsigned int milisec);
+void* _abqueue_deq_assurance(abqueue_t *abqueue);
+void*  worker_deq(void *);
+void*  worker_enq(void *);
+void*  worker_enq_deq(void *);
 void one_enq_and_multi_deq(pthread_t *threads);
 void one_deq_and_multi_enq(pthread_t *threads);
 void multi_enq_deq(pthread_t *threads);
+
 
 void running_test(test_function testfn);
 
@@ -41,12 +43,21 @@ void _sleep(unsigned int milisec) {
 #endif
 }
 
-void*  worker_c(void *arg) {
+void* _abqueue_deq_assurance(abqueue_t *abqueue){
+  void *v;
+    while ( !(v = abqueue_deq(abqueue)) ) {
+      abqueue_sleep(1);
+      printf(".");
+    }
+    return v;
+}
+
+void*  worker_deq(void *arg) {
 	int i = 0;
 	int *int_data;
 	int total_loop = total_put * (*(int*)arg);
 	while (i++ < total_loop) {
-		while ((int_data = abqueue_deq(myq)) == NULL) {
+		while ((int_data = _abqueue_deq_assurance(myq)) == NULL) {
 		  _sleep(1);
 		}
 
@@ -56,7 +67,7 @@ void*  worker_c(void *arg) {
 	return 0;
 }
 
-void*  worker_s(void *arg)
+void*  worker_enq(void *arg)
 {
 	int i = 0, *int_data;
 	int total_loop = total_put * (*(int*)arg);
@@ -71,7 +82,7 @@ void*  worker_s(void *arg)
 	return 0;
 }
 
-void*  worker_sc(void *arg)
+void*  worker_enq_deq(void *arg)
 {
 	int i = 0;
 	int *int_data;
@@ -83,7 +94,7 @@ void*  worker_sc(void *arg)
 			printf("ENQ FULL?\n");
 		}
 
-		while ((int_data = abqueue_deq(myq)) == NULL) {
+		while ((int_data = _abqueue_deq_assurance(myq)) == NULL) {
 			_sleep(1);
 		}
 		free(int_data);
@@ -110,7 +121,7 @@ void multi_enq_deq(pthread_t *threads) {
 	printf("-----------%s---------------\n", "multi_enq_deq");
 	int i;
 	for (i = 0; i < nthreads; i++) {
-		pthread_create(threads + i, NULL, worker_sc, NULL);
+		pthread_create(threads + i, NULL, worker_enq_deq, NULL);
 	}
 
 	join_threads;
@@ -121,9 +132,9 @@ void one_deq_and_multi_enq(pthread_t *threads) {
 	printf("-----------%s---------------\n", "one_deq_and_multi_enq");
 	int i;
 	for (i = 0; i < nthreads; i++)
-		pthread_create(threads + i, NULL, worker_s, &one_thread);
+		pthread_create(threads + i, NULL, worker_enq, &one_thread);
 
-	worker_c(&nthreads);
+	worker_deq(&nthreads);
 
 	join_threads;
 	// detach_thread_and_loop;
@@ -133,9 +144,9 @@ void one_enq_and_multi_deq(pthread_t *threads) {
 	printf("-----------%s---------------\n", "one_enq_and_multi_deq");
 	int i;
 	for (i = 0; i < nthreads; i++)
-		pthread_create(threads + i, NULL, worker_c, &one_thread);
+		pthread_create(threads + i, NULL, worker_deq, &one_thread);
   
-  worker_s(&nthreads);
+  worker_enq(&nthreads);
   
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wimplicit-function-declaration"
@@ -160,8 +171,8 @@ void running_test(test_function testfn) {
 //		 one_enq_and_multi_deq(threads);
 //		one_deq_and_multi_enq(threads);
 		// multi_enq_deq(threads);
-		// worker_s(&ri);
-		// worker_c(&ri);
+		// worker_enq(&ri);
+		// worker_deq(&ri);
 
 		gettimeofday(&tv2, NULL);
 		printf ("Total time = %f seconds\n",
