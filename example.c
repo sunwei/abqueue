@@ -49,7 +49,6 @@ void*  worker_c(void *arg) {
 		while ((int_data = abqueue_deq(myq)) == NULL) {
 		  _sleep(1);
 		}
-//		printf("%d\n", *int_data);
 
 		free(int_data);
 	}
@@ -57,7 +56,6 @@ void*  worker_c(void *arg) {
 	return 0;
 }
 
-/** Worker Keep Sending at the same time, do not try instensively **/
 void*  worker_s(void *arg)
 {
 	int i = 0, *int_data;
@@ -70,11 +68,9 @@ void*  worker_s(void *arg)
 			 printf("ENQ FULL?\n");
 		}
 	}
-//	 __sync_add_and_fetch(&nthreads_exited, 1);
 	return 0;
 }
 
-/** Worker Send And Consume at the same time **/
 void*  worker_sc(void *arg)
 {
 	int i = 0;
@@ -83,17 +79,13 @@ void*  worker_sc(void *arg)
 		int_data = (int*)malloc(sizeof(int));
 		assert(int_data != NULL);
 		*int_data = i++;
-		printf("%s -- %d\n", "????", *int_data);
-		/*Enqueue*/
 		while (abqueue_enq(myq, int_data)) {
 			printf("ENQ FULL?\n");
 		}
 
-		/*Dequeue*/
 		while ((int_data = abqueue_deq(myq)) == NULL) {
 			_sleep(1);
 		}
-		// printf("%d\n", *int_data);
 		free(int_data);
 	}
 	__sync_add_and_fetch(&nthreads_exited, 1);
@@ -101,14 +93,11 @@ void*  worker_sc(void *arg)
 }
 
 #define join_threads \
-printf("%s", "join start...");\
 for (i = 0; i < nthreads; i++) {\
 pthread_join(threads[i], NULL); \
-}\
-printf("%s", "join end...");
+}
 
 #define detach_thread_and_loop \
-printf("%s\n", "detach thread and loop...");\
 for (i = 0; i < nthreads; i++)\
   pthread_detach(threads[i]);\
 while ( nthreads_exited < nthreads ) \
@@ -180,8 +169,7 @@ void running_test(test_function testfn) {
 		        (double) (tv2.tv_sec - tv1.tv_sec));
 
 		_sleep(10);
-		assert ( 0 == 0 && "Error, all queue should be consumed but not");
-//		assert ( 0 == abqueue_size(myq) && "Error, all queue should be consumed but not");
+		assert ( 0 == abqueue_size(myq) && "Error, all queue should be consumed but not");
 	}
 }
 
@@ -192,11 +180,9 @@ int main(void) {
 
 	running_test(one_enq_and_multi_deq);
 	running_test(one_deq_and_multi_enq);
-//	running_test(multi_enq_deq);
-
+	running_test(multi_enq_deq);
 
 	abqueue_destroy(myq);
-	// sleep(3);
 	free(myq);
 
 	printf("Test Pass!\n");
