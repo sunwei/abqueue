@@ -51,7 +51,7 @@ inline BOOL __SYNC_BOOL_CAS(LONG volatile *dest, LONG input, LONG comparand) {
 #endif
 
 #include "abqueue.h"
-#define _RECYCLE_QUEUE_MAX_SIZE 20
+#define _RECYCLE_QUEUE_MAX_SIZE 200
 abqueue_t *_recycle_queue = NULL;
 
 struct abqueue_node_s {
