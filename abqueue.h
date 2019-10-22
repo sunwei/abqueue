@@ -25,7 +25,6 @@ extern int    abqueue_simple_init(abqueue_t *abqueue);
 extern int    abqueue_enq(abqueue_t *abqueue, void* value);
 extern void*  abqueue_deq(abqueue_t *abqueue);
 extern void   abqueue_destroy(abqueue_t *abqueue);
-extern void   abqueue_sleep(unsigned int milisec);
 extern size_t abqueue_size(abqueue_t *abqueue);
 
 #ifdef __cplusplus

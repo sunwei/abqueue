@@ -19,7 +19,7 @@
 #include <time.h>
 #ifdef _WIN64
 inline BOOL __SYNC_BOOL_CAS(LONG64 volatile *dest, LONG64 input, LONG64 comparand) {
-	return InterlockedCompareExchangeNoFence64(dest, input, comparand) == comparand;
+  return InterlockedCompareExchangeNoFence64(dest, input, comparand) == comparand;
 }
 #define __ABQ_VAL_COMPARE_AND_SWAP(dest, comparand, input) \
     InterlockedCompareExchangeNoFence64((LONG64 volatile *)dest, (LONG64)input, (LONG64)comparand)
@@ -34,7 +34,7 @@ inline BOOL __SYNC_BOOL_CAS(LONG64 volatile *dest, LONG64 input, LONG64 comparan
 #define asm __asm
 #endif
 inline BOOL __SYNC_BOOL_CAS(LONG volatile *dest, LONG input, LONG comparand) {
-	return InterlockedCompareExchangeNoFence(dest, input, comparand) == comparand;
+  return InterlockedCompareExchangeNoFence(dest, input, comparand) == comparand;
 }
 #define __ABQ_VAL_COMPARE_AND_SWAP(dest, comparand, input) \
     InterlockedCompareExchangeNoFence((LONG volatile *)dest, (LONG)input, (LONG)comparand)
@@ -151,27 +151,27 @@ static abqueue_node_t* _dequeue(abqueue_t *abqueue){
   abqueue_node_t *head, *next;
   
   for (;;) {
-  		head = abqueue->head;
-  		if (__ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->head, head, head)) {
-  			next = head->next;
-  			if (__ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->tail, head, head)) {
-  				if (next == NULL) {
-  					__ABQ_SYNC_MEMORY();
+      head = abqueue->head;
+      if (__ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->head, head, head)) {
+        next = head->next;
+        if (__ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->tail, head, head)) {
+          if (next == NULL) {
+            __ABQ_SYNC_MEMORY();
             return NULL;
-  				}
-  			}
-  			else {
-  				if (next) {
-  					if (__ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->head, head, next)) {
-  						return next;
-  					}
-  				} else {
-  					__ABQ_SYNC_MEMORY();
+          }
+        }
+        else {
+          if (next) {
+            if (__ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->head, head, next)) {
+              return next;
+            }
+          } else {
+            __ABQ_SYNC_MEMORY();
             return NULL;
-  				}
-  			}
-  		}
-  	}
+          }
+        }
+      }
+    }
   
   __ABQ_SYNC_MEMORY();
   return NULL;
@@ -244,13 +244,3 @@ static void _init_recycle_queue(abqueue_t *abqueue){
   abqueue_init(_recycle_queue, abqueue->mpl, abqueue->_malloc, abqueue->_free);
 }
 
-void abqueue_sleep(unsigned int milisec) {
-#if defined __GNUC__ || defined __CYGWIN__ || defined __MINGW32__ || defined __APPLE__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wimplicit-function-declaration"
-	usleep(milisec * 1000);
-#pragma GCC diagnostic pop
-#else
-	Sleep(milisec);
-#endif
-}
