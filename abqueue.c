@@ -151,27 +151,27 @@ static abqueue_node_t* _dequeue(abqueue_t *abqueue){
   abqueue_node_t *head, *next;
   
   for (;;) {
-      head = abqueue->head;
-      if (__ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->head, head, head)) {
-        next = head->next;
-        if (__ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->tail, head, head)) {
-          if (next == NULL) {
-            __ABQ_SYNC_MEMORY();
-            return NULL;
-          }
+    head = abqueue->head;
+    if (__ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->head, head, head)) {
+      next = head->next;
+      if (__ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->tail, head, head)) {
+        if (next == NULL) {
+          __ABQ_SYNC_MEMORY();
+          return NULL;
         }
-        else {
-          if (next) {
-            if (__ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->head, head, next)) {
-              return next;
-            }
-          } else {
-            __ABQ_SYNC_MEMORY();
-            return NULL;
+      }
+      else {
+        if (next) {
+          if (__ABQ_BOOL_COMPARE_AND_SWAP(&abqueue->head, head, next)) {
+            return next;
           }
+        } else {
+          __ABQ_SYNC_MEMORY();
+          return NULL;
         }
       }
     }
+  }
   
   __ABQ_SYNC_MEMORY();
   return NULL;
@@ -220,8 +220,6 @@ static void _free_recycle_node(void){
 
 static void _restore_node(abqueue_node_t *node){
   if(node){
-//    __ABQ_BOOL_COMPARE_AND_SWAP(&node->next, node->next, NULL);
-//    __ABQ_BOOL_COMPARE_AND_SWAP(&node->value, node->value, NULL);
     node->next = NULL;
     node->value = NULL;
   }
