@@ -193,6 +193,8 @@ int main(void) {
   running_test(one_deq_and_multi_enq);
   running_test(multi_enq_deq);
 
+  _sleep(10);
+  
   abqueue_destroy(myq);
   free(myq);
 
