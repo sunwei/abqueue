@@ -19,13 +19,14 @@ void*  worker_enq_deq(void *);
 void one_enq_and_multi_deq(pthread_t *threads);
 void one_deq_and_multi_enq(pthread_t *threads);
 void multi_enq_deq(pthread_t *threads);
+void one_enq_and_one_deq(void);
 
 
 void running_test(test_function testfn);
 
 struct timeval  tv1, tv2;
-#define total_put 50000
-#define total_running_loop 50
+#define total_put 500
+#define total_running_loop 10
 int nthreads = 4;
 int one_thread = 1;
 int nthreads_exited = 0;
@@ -45,11 +46,11 @@ void _sleep(unsigned int milisec) {
 
 void* _abqueue_deq_assurance(abqueue_t *abqueue){
   void *v;
-    while ( !(v = abqueue_deq(abqueue)) ) {
-      _sleep(1);
-      printf(".");
-    }
-    return v;
+  while ( !(v = abqueue_deq(abqueue)) ) {
+    _sleep(1);
+    printf(".");
+  }
+  return v;
 }
 
 void*  worker_deq(void *arg) {
@@ -184,11 +185,39 @@ void running_test(test_function testfn) {
   }
 }
 
+void one_enq_and_one_deq(void) {
+  printf("-----------%s---------------\n", "one_enq_and_one_deq");
+  int i = 0, *int_data;
+  int total_loop = 10;
+  while (i++ < total_loop) {
+    int_data = (int*)malloc(sizeof(int));
+    assert(int_data != NULL);
+    *int_data = i;
+    while (abqueue_enq(myq, int_data)) {
+       printf("ENQ FULL?\n");
+    }
+  }
+  
+  while (i-- >= 0) {
+    int_data = abqueue_deq(myq);
+    if(int_data){
+      free(int_data);
+    }
+  }
+  
+  abqueue_deq(myq);
+  abqueue_deq(myq);
+  abqueue_deq(myq);
+  assert ( NULL == abqueue_deq(myq));
+  assert ( 0 == abqueue_size(myq) && "Error, all queue should be consumed but not");
+}
+
 int main(void) {
-  myq = malloc(sizeof  (abqueue_t));
+  myq = malloc(sizeof(abqueue_t));
   if (abqueue_simple_init(myq) == -1)
     return -1;
-
+  
+  one_enq_and_one_deq();
   running_test(one_enq_and_multi_deq);
   running_test(one_deq_and_multi_enq);
   running_test(multi_enq_deq);

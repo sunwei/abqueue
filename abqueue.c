@@ -113,6 +113,7 @@ int abqueue_enq(abqueue_t* abqueue, void* value){
     return errno;
   }
   
+  __ABQ_ADD_AND_FETCH(&abqueue->size, 1);
   return 0;
 }
 
@@ -127,6 +128,7 @@ void* abqueue_deq(abqueue_t *abqueue) {
       _init_recycle_queue(abqueue);
     }
     _recycle_node(node);
+    __ABQ_FETCH_AND_ADD(&abqueue->size, -1);
   }
   return val;
 }
